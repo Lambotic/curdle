@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CURDLE: Repetitive Riddles</title>
+    <style>
+        :root {
+            --color-correct: #6aaa64;
+            --color-present: #c9b458;
+            --color-absent: #787c7e;
+            --color-tile-border: #d3d6da;
+        }
+        body {
+            font-family: sans-serif;
+            background-color: #ffffff;
+            color: #1a1a1a;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            margin: 0;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--color-tile-border);
+            width: 100%;
+            max-width: 500px;
+            padding-bottom: 10px;
+        }
+        .subtitle { margin: 5px 0 5px 0; color: #666; font-size: 14px; }
+        #streak-bar { font-weight: bold; color: #333; font-size: 14px; margin-top: 5px; }
+        #game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            max-width: 500px;
+        }
+        #grid {
+            display: grid;
+            grid-template-rows: repeat(5, 1fr);
+            grid-gap: 5px;
+            margin-bottom: 20px;
+        }
+        .row {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            grid-gap: 5px;
+        }
+        .tile {
+            width: 52px;
+            height: 52px;
+            border: 2px solid var(--color-tile-border);
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            font-weight: bold;
+            text-transform: uppercase;
+            transition: background-color 0.2s;
+        }
+        #clue-box {
+            width: 100%;
+            background-color: #f4f4f4;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 20px;
+            text-align: center;
+            box-sizing: border-box;
+        }
+        .clue-btn {
+            background-color: #1a1a1a;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-weight: bold;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .clue-btn:disabled { background-color: #ccc; cursor: not-allowed; }
+        #keyboard { display: flex; flex-direction: column; width: 100%; row-gap: 8px; }
+        .keyboard-row { display: flex; justify-content: center; width: 100%; column-gap: 6px; }
+        .key {
+            background-color: #e5e5e5;
+            border: 0;
+            height: 58px;
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            border-radius: 4px;
+            cursor: pointer;
+            text-transform: uppercase;
+        }
+        .key.wide { flex: 1.5; font-size: 12px; }
+        #message { margin-top: 15px; font-weight: bold; font-size: 18px; text-align: center; height: 24px; }
+    </style>
+</head>
+<body>
+    <!-- Login Screen panel overlay -->
+    <div id="login-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #ffffff; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100;">
+        <h1 style="font-size: 36px; margin-bottom: 10px;">CURDLE</h1>
+        <p style="color: #666; margin-bottom: 20px;">Enter your Profile ID to load your game progress</p>
+        <div style="display: flex; gap: 8px;">
+            <input type="text" id="user-id-input" placeholder="User ID (e.g., Player1)" style="padding: 12px; font-size: 16px; border: 2px solid #d3d6da; border-radius: 4px; width: 220px; outline: none;">
+            <button class="clue-btn" onclick="handleLogin()" style="padding: 0 20px;">Login</button>
+        </div>
+        <div id="login-message" style="margin-top: 15px; color: #d9534f; font-weight: bold; height: 20px;"></div>
+    </div>
+
+    <!-- Main Active Game Layout Panel Container Elements View Frame -->
+    <!-- Main Active Game Layout Panel Container Elements View Frame -->
+    <header>
+        <div style="font-size: 12px; color: #787c7e; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; display: flex; justify-content: center; gap: 10px; align-items: center;">
+            <span id="user-display">Player: None</span>
+            <span style="color: #d3d6da;">|</span>
+            <a href="#" onclick="handleLogout(event)" style="color: #d9534f; text-decoration: none; font-weight: bold; text-transform: none;">Log Out / Exit</a>
+        </div>
+        <h1>CURDLE</h1>
+        <p class="subtitle">Guess the 5 Letter word with just 3 unique letters. 5 Attempts.</p>
+        <div id="streak-bar">Completed: 0 of 34 words</div>
+    </header>
+
+    <div id="game-container">
+        <div id="grid"></div>
+        <div id="clue-box">
+            <button id="clue-btn" class="clue-btn" onclick="revealClue()" disabled>Unlock Clue (Attempt 5)</button>
+            <span id="clue-text" style="display:none;"></span>
+        </div>
+        <div id="keyboard"></div>
+        <div id="message"></div>
+        <div id="prompt-message" style="margin-top: 10px; font-weight: 500; min-height: 20px;"></div>
+        <div id="reset-box" style="margin-top: 10px; display: none;">
+            <button id="action-btn" class="clue-btn" onclick="handleGameNext()">Try another</button>
+        </div>
+    </div>
+<script>
+    const wordList = [
+        {w: "ERROR", d: "Easy", c: "A mistake, blunder, or computer flaw."},
+        {w: "ESSES", d: "Extreme", c: "Plural of 19th letter; winding road curves."},
+        {w: "MAMMA", d: "Easy", c: "Warm, colloquial term for mother."},
+        {w: "SHUSH", d: "Medium", c: "Urgent demand to be quiet."},
+        {w: "BOBBY", d: "Medium", c: "British police officer."},
+        {w: "DADDY", d: "Easy", c: "Affectionate name for father."},
+        {w: "EERIE", d: "Easy", c: "Strange and mysterious."},
+        {w: "FLUFF", d: "Easy", c: "Soft, light, downy particles."},
+        {w: "GEESE", d: "Easy", c: "Large waterfowl flying in a V-formation."},
+        {w: "NINNY", d: "Hard", c: "A foolish person; simpleton."},
+        {w: "PUPPY", d: "Easy", c: "A young domestic dog."},
+        {w: "SASSY", d: "Easy", c: "Lively, bold, and cheeky."},
+        {w: "SLYLY", d: "Hard", c: "Done in a cunning, secretive manner."},
+        {w: "TATTY", d: "Hard", c: "Cheap or worn and threadbare."},
+        {w: "TEETH", d: "Easy", c: "Bony structures used for biting."},
+        {w: "ALLAY", d: "Hard", c: "Diminish or quiet a fear or suspicion."},
+        {w: "ALLEY", d: "Easy", c: "Narrow passageway or bowling lane."},
+        {w: "ARRAY", d: "Medium", c: "An orderly arrangement or data structure."},
+        {w: "BELLE", d: "Medium", c: "A popular, beautiful woman."},
+        {w: "BOOBY", d: "Easy", c: "Tropical seabird or foolish mistake."},
+        {w: "CIVIC", d: "Medium", c: "Relating to a city or community affairs."},
+        {w: "CIVVY", d: "Extreme", c: "Slang for civilian clothing."},
+        {w: "COCOA", d: "Easy", c: "Powder made from roasted cacao seeds."},
+        {w: "KAYAK", d: "Easy", c: "Watercraft with double-bladed paddle."},
+        {w: "LEVEL", d: "Easy", c: "A flat, even surface or game tier."},
+        {w: "MAMBA", d: "Medium", c: "Highly venomous, fast African snake."},
+        {w: "ONION", d: "Easy", c: "Pungent bulb vegetable causing tears."},
+        {w: "PAPAL", d: "Medium", c: "Relating to the Pope."},
+        {w: "RADAR", d: "Easy", c: "Radio wave detection system."},
+        {w: "ROTOR", d: "Medium", c: "Rotating part of a machine."},
+        {w: "SENSE", d: "Easy", c: "Physical perception or sound judgment."},
+        {w: "VALVE", d: "Medium", c: "Flow control device."},
+        {w: "VERVE", d: "Hard", c: "Great vitality and artistic spirit."},
+        {w: "VIVID", d: "Easy", c: "Strikingly bright or intense color."}
+    ];
+</script>
+<script>
+    let currentUserId = "";
+    let foundWordsIndices = []; 
+    let currentPuzzleIdx = -1;
+    let puzzle, targetWord, currentAttempt, currentGuess, gameOver;
+    
+    const grid = document.getElementById("grid");
+    const keyboard = document.getElementById("keyboard");
+    const clueBtn = document.getElementById("clue-btn");
+    const clueText = document.getElementById("clue-text");
+    const message = document.getElementById("message");
+    const promptMessage = document.getElementById("prompt-message");
+    const resetBox = document.getElementById("reset-box");
+    const actionBtn = document.getElementById("action-btn");
+    const streakBar = document.getElementById("streak-bar");
+
+    for (let i = 0; i < 5; i++) {
+        let row = document.createElement("div");
+        row.className = "row";
+        for (let j = 0; j < 5; j++) {
+            let tile = document.createElement("div");
+            tile.className = "tile";
+            tile.id = "tile-" + i + "-" + j;
+            row.appendChild(tile);
+        }
+        grid.appendChild(row);
+    }
+
+    const rows = [
+        ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
+        ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
+        ["enter", "z", "x", "c", "v", "b", "n", "m", "backspace"]
+    ];
+
+    rows.forEach(function(r) {
+        let rowDiv = document.createElement("div");
+        rowDiv.className = "keyboard-row";
+        r.forEach(function(key) {
+            let btn = document.createElement("button");
+            btn.className = "key";
+            btn.textContent = key === "backspace" ? "⌫" : key;
+            btn.id = "key-" + key;
+            if (key === "enter" || key === "backspace") btn.classList.add("wide");
+            btn.onclick = function() { handleInput(key); };
+            rowDiv.appendChild(btn);
+        });
+        keyboard.appendChild(rowDiv);
+    });
+
+    document.addEventListener("keydown", function(e) {
+        if (currentUserId === "" || gameOver) return;
+        let key = e.key.toLowerCase();
+        let isControl = ["enter", "backspace"].indexOf(key) !== -1;
+        let isLetter = (key.length === 1 && "abcdefghijklmnopqrstuvwxyz".indexOf(key) !== -1);
+        if (isControl ? true : isLetter) handleInput(key);
+    });
+
+    function handleInput(key) {
+        if (gameOver) return;
+        message.textContent = "";
+        if (key === "backspace") {
+            if (currentGuess.length > 0) {
+                currentGuess = currentGuess.slice(0, -1);
+                updateRowVisuals();
+            }
+        } else if (key === "enter") {
+            if (currentGuess.length === 5) submitGuess();
+            else message.textContent = "Not enough letters";
+        } else if (currentGuess.length < 5 && key !== "enter") {
+            currentGuess += key.toUpperCase();
+            updateRowVisuals();
+        }
+    }
+
+    function updateRowVisuals() {
+        for (let j = 0; j < 5; j++) {
+            let tile = document.getElementById("tile-" + currentAttempt + "-" + j);
+            tile.textContent = currentGuess[j] ? currentGuess[j] : "";
+        }
+    }
+</script>
+<script>
+    function handleLogin() {
+        const rawInput = document.getElementById("user-id-input").value.trim();
+        if (rawInput === "") {
+            document.getElementById("login-message").textContent = "Please enter a valid User ID";
+            return;
+        }
+        currentUserId = rawInput;
+        document.getElementById("user-display").textContent = "Player: " + currentUserId;
+        document.getElementById("login-overlay").style.display = "none";
+        
+        const savedData = localStorage.getItem("curdle_progress_" + currentUserId);
+        if (savedData) foundWordsIndices = JSON.parse(savedData);
+        else foundWordsIndices = [];
+        
+        currentPuzzleIdx = selectNextPuzzleIndex();
+        initGame();
+    }
+
+    function saveUserProgress() {
+        localStorage.setItem("curdle_progress_" + currentUserId, JSON.stringify(foundWordsIndices));
+    }
+
+    function selectNextPuzzleIndex() {
+        if (foundWordsIndices.length >= wordList.length) return -2; 
+        let available = [];
+        for (let i = 0; i < wordList.length; i++) {
+            if (foundWordsIndices.indexOf(i) === -1) available.push(i);
+        }
+        return available[Math.floor(Math.random() * available.length)];
+    }
+
+    function initGame() {
+        if (currentPuzzleIdx === -1 || foundWordsIndices.length === 0) {
+            currentPuzzleIdx = selectNextPuzzleIndex();
+        }
+        puzzle = wordList[currentPuzzleIdx];
+        targetWord = puzzle.w;
+        currentAttempt = 0;
+        currentGuess = "";
+        gameOver = false;
+        message.textContent = "";
+        promptMessage.textContent = "";
+        resetBox.style.display = "none";
+        clueBtn.style.display = "inline-block";
+        clueBtn.disabled = true;
+        clueText.style.display = "none";
+        clueText.textContent = "";
+        streakBar.textContent = "Completed: " + foundWordsIndices.length + " of " + wordList.length + " words";
+        
+        for (let i = 0; i < 5; i++) {
+            for (let j = 0; j < 5; j++) {
+                let tile = document.getElementById("tile-" + i + "-" + j);
+                tile.textContent = "";
+                tile.style.backgroundColor = "transparent";
+                tile.style.color = "#1a1a1a";
+                tile.style.borderColor = "var(--color-tile-border)";
+            }
+        }
+        let keys = document.getElementsByClassName("key");
+        for (let i = 0; i < keys.length; i++) {
+            keys[i].style.backgroundColor = "#e5e5e5";
+            keys[i].style.color = "#1a1a1a";
+            keys[i].setAttribute("data-status", "none"); 
+        }
+    }
+
+    function submitGuess() {
+        let counts = {};
+        for (let i = 0; i < targetWord.length; i++) {
+            counts[targetWord[i]] = (counts[targetWord[i]] || 0) + 1;
+        }
+        let results = Array(5).fill("absent");
+
+        for (let j = 0; j < 5; j++) {
+            if (currentGuess[j] === targetWord[j]) {
+                results[j] = "correct";
+                counts[currentGuess[j]]--;
+            }
+        }
+        for (let j = 0; j < 5; j++) {
+            if (results[j] !== "correct" && counts[currentGuess[j]] > 0) {
+                results[j] = "present";
+                counts[currentGuess[j]]--;
+            }
+        }
+        for (let j = 0; j < 5; j++) {
+            let tile = document.getElementById("tile-" + currentAttempt + "-" + j);
+            let color = results[j] === "correct" ? "#6aaa64" : (results[j] === "present" ? "#c9b458" : "#787c7e");
+            tile.style.backgroundColor = color;
+            tile.style.color = "white";
+            tile.style.borderColor = "transparent";
+            
+            let keyBtn = document.getElementById("key-" + currentGuess[j].toLowerCase());
+            if (keyBtn) {
+                let currentStatus = keyBtn.getAttribute("data-status");
+                if (results[j] === "correct") {
+                    keyBtn.style.backgroundColor = "#6aaa64";
+                    keyBtn.style.color = "white";
+                    keyBtn.setAttribute("data-status", "correct");
+                } else if (results[j] === "present" && currentStatus !== "correct") {
+                    keyBtn.style.backgroundColor = "#c9b458";
+                    keyBtn.style.color = "white";
+                    keyBtn.setAttribute("data-status", "present");
+                } else if (results[j] === "absent" && currentStatus !== "correct" && currentStatus !== "present") {
+                    keyBtn.style.backgroundColor = "#787c7e";
+                    keyBtn.style.color = "white";
+                    keyBtn.setAttribute("data-status", "absent");
+                }
+            }
+        }
+
+        if (currentGuess === targetWord) {
+            gameOver = true;
+            if (foundWordsIndices.indexOf(currentPuzzleIdx) === -1) foundWordsIndices.push(currentPuzzleIdx);
+            saveUserProgress();
+            streakBar.textContent = "Completed: " + foundWordsIndices.length + " of " + wordList.length + " words";
+            
+            if (foundWordsIndices.length >= wordList.length) {
+                message.style.color = "#6aaa64";
+                message.textContent = "GAME COMPLETED!";
+                promptMessage.textContent = "";
+                actionBtn.textContent = "START AGAIN?";
+                resetBox.style.display = "block";
+            } else {
+                message.style.color = "#6aaa64";
+                message.textContent = "You have found " + foundWordsIndices.length + " of " + wordList.length + " words.";
+                promptMessage.textContent = "Try another or Quit?";
+                actionBtn.textContent = "Try another";
+                resetBox.style.display = "block";
+            }
+            return;
+        }
+
+        currentAttempt++;
+        currentGuess = "";
+        if (currentAttempt === 4) clueBtn.disabled = false;
+        if (currentAttempt === 5) {
+            message.style.color = "#d9534f";
+            message.textContent = "Game Over! The word was " + targetWord;
+            promptMessage.textContent = "Try another or Quit?";
+            actionBtn.textContent = "Try another";
+            gameOver = true;
+            resetBox.style.display = "block";
+        }
+    }
+
+    function revealClue() {
+        clueBtn.style.display = "none";
+        clueText.style.display = "inline";
+        clueText.innerHTML = "<strong>Clue (" + puzzle.d + "):</strong> " + puzzle.c;
+    }
+
+    function handleGameNext() {
+        if (foundWordsIndices.length >= wordList.length) {
+            foundWordsIndices = []; 
+            saveUserProgress();
+        }
+        currentPuzzleIdx = selectNextPuzzleIndex();
+        initGame();
+    }
+
+    function handleLogout(e) {
+        if (e) e.preventDefault();
+        currentUserId = "";
+        foundWordsIndices = [];
+        currentPuzzleIdx = -1;
+        gameOver = true;
+        document.getElementById("user-id-input").value = "";
+        document.getElementById("login-message").textContent = "";
+        document.getElementById("user-display").textContent = "Player: None";
+        document.getElementById("login-overlay").style.display = "flex";
+    }
+</script>
+
+</body>
+</html>
